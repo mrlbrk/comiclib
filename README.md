@@ -1,11 +1,10 @@
-# Panel — Comic Collection V5.19
+# Panel — Comic Collection V5.20
 
 Cloudflare Pages-ready build.
 
-## Structure
-- `index.html` — application
-- `functions/amazon-search.js` — Amazon.es server-side title search
-- `_routes.json` — routes only `/api/*` through Pages Functions
+Repository structure:
+- `index.html`
+- `_routes.json`
+- `functions/amazon-search.js`
 
-## Cloudflare Pages
-Connect the GitHub repository using Pages Git integration. Production branch: `main`. This is a plain HTML/JavaScript app, so no build command is required and the output directory is `/`.
+Cloudflare Pages: connect this GitHub repository and deploy the `main` branch. No build command is required; the output directory is `/`.

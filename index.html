@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Panel — Comic Collection V5.19</title>
+<title>Panel — Comic Collection V5.20</title>
 <style>
 :root{--bg:#f4f6fa;--card:#fff;--text:#172033;--muted:#697386;--line:#e1e6ef;--accent:#635bff;--green:#17864e}
 *{box-sizing:border-box}
@@ -65,7 +65,7 @@ input,select,textarea{width:100%;border:1px solid #d4dbe6;border-radius:9px;padd
 <body>
 <header>
 <h1>📚 Panel — Comic Collection</h1>
-<p>V5.19 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
+<p>V5.20 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
 </header>
 <nav id="nav"></nav>
 <main>
@@ -96,7 +96,7 @@ input,select,textarea{width:100%;border:1px solid #d4dbe6;border-radius:9px;padd
 (function(){
 "use strict";
 
-var DB_KEY="panelComicCollectionV5_18";
+var DB_KEY="panelComicCollectionV5_20";
 var db={view:"editions",editions:[],settings:{currency:"EUR",language:"en"}};
 var ratesCache={base:"EUR",rates:{EUR:1},fetchedAt:0};
 var filters={q:"",country:"",language:"",publisher:"",status:""};
@@ -206,7 +206,7 @@ function seed(){
 }
 function load(){
  var raw=null;
- try{raw=localStorage.getItem(DB_KEY)||localStorage.getItem("panelComicCollectionV5_15")||localStorage.getItem("panelComicCollectionV5_14")||localStorage.getItem("panelComicCollectionV5_13")||localStorage.getItem("panelComicCollectionV5_12")||localStorage.getItem("panelComicCollectionV5_11")||localStorage.getItem("panelComicCollectionV5_10")||localStorage.getItem("panelComicCollectionV5_9")||localStorage.getItem("panelComicCollectionV5_8")||localStorage.getItem("panelComicCollectionV5_7")||localStorage.getItem("panelComicCollectionV5_6")||localStorage.getItem("panelComicCollectionV5_5")||localStorage.getItem("panelComicCollectionV5_4")||localStorage.getItem("panelComicCollectionV5_3")||localStorage.getItem("panelComicCollectionV5_0")||localStorage.getItem("panelComicCollectionV4_4")}catch(e){}
+ try{raw=localStorage.getItem(DB_KEY)||localStorage.getItem("panelComicCollectionV5_19")||localStorage.getItem("panelComicCollectionV5_18")||localStorage.getItem("panelComicCollectionV5_15")||localStorage.getItem("panelComicCollectionV5_14")||localStorage.getItem("panelComicCollectionV5_13")||localStorage.getItem("panelComicCollectionV5_12")||localStorage.getItem("panelComicCollectionV5_11")||localStorage.getItem("panelComicCollectionV5_10")||localStorage.getItem("panelComicCollectionV5_9")||localStorage.getItem("panelComicCollectionV5_8")||localStorage.getItem("panelComicCollectionV5_7")||localStorage.getItem("panelComicCollectionV5_6")||localStorage.getItem("panelComicCollectionV5_5")||localStorage.getItem("panelComicCollectionV5_4")||localStorage.getItem("panelComicCollectionV5_3")||localStorage.getItem("panelComicCollectionV5_0")||localStorage.getItem("panelComicCollectionV4_4")}catch(e){}
  if(raw){
   try{
    var parsed=JSON.parse(raw);
@@ -691,26 +691,63 @@ async function lookupISBN(value){
    setStatus('⚠ ISBN captured, but no metadata source returned a match. The ISBN is still in the form.','No online metadata match was found. You can complete the edition manually or search by title.');
  }
 }
-async function startScanner(){
- scanner.classList.add("open");scanStatus.textContent="Starting camera…";
- if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scanStatus.textContent="Camera unavailable. Enter the ISBN manually.";return}
- if(!("BarcodeDetector" in window)){scanStatus.textContent="This browser does not support barcode detection. Enter the ISBN manually.";return}
+var zxingPromise=null;
+function loadZXing(){
+ if(zxingPromise)return zxingPromise;
+ zxingPromise=new Promise(function(resolve,reject){
+  if(window.ZXingBrowser){resolve(window.ZXingBrowser);return;}
+  var sc=document.createElement("script");
+  sc.src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js";
+  sc.onload=function(){if(window.ZXingBrowser)resolve(window.ZXingBrowser);else reject(new Error("ZXing did not load"));};
+  sc.onerror=function(){reject(new Error("ZXing failed to load"));};
+  document.head.appendChild(sc);
+ });
+ return zxingPromise;
+}
+async function startBarcodeDetector(){
  try{
   var fm=await BarcodeDetector.getSupportedFormats();
   var use=fm.filter(function(x){return["ean_13","ean_8","upc_a","upc_e","code_128"].indexOf(x)>=0});
   var detector=new BarcodeDetector({formats:use.length?use:fm});
   scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});
-  scanVideo.srcObject=scanStream;scanStatus.textContent="Scanning…";
+  scanVideo.srcObject=scanStream;await scanVideo.play();scanStatus.textContent="Scanning…";
   async function loop(){
    if(!scanStream)return;
    try{
     var codes=await detector.detect(scanVideo);
-    if(codes.length){var value=codes[0].rawValue||"";stopScanner();var normalized=normalizeISBN(value);var input=document.getElementById("fisbn");if(input){input.value=normalized;var st=document.getElementById("scanStatus");if(st)st.textContent="ISBN captured: "+normalized+". Looking up metadata…";lookupISBN(normalized)}return}
+    if(codes.length){var value=codes[0].rawValue||"";stopScanner();var normalized=normalizeISBN(value);var input=document.getElementById("fisbn");if(input)input.value=normalized;lookupISBN(normalized);return;}
    }catch(e){}
    requestAnimationFrame(loop);
   }
-  scanVideo.onloadeddata=function(){requestAnimationFrame(loop)};
- }catch(e){scanStatus.textContent="Camera permission failed. Allow camera access and try again."}
+  requestAnimationFrame(loop);return true;
+ }catch(e){
+  if(scanStream)stopScanner();
+  throw e;
+ }
+}
+async function startZXing(){
+ var ZX=await loadZXing();
+ scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});
+ scanVideo.srcObject=scanStream;await scanVideo.play();scanStatus.textContent="Scanning…";
+ var reader=new ZX.BrowserMultiFormatReader();
+ reader.decodeFromVideoDevice(undefined,scanVideo,function(result,error){
+  if(result){var value=result.getText?result.getText():result.text||"";stopScanner();var normalized=normalizeISBN(value);var input=document.getElementById("fisbn");if(input)input.value=normalized;lookupISBN(normalized);}
+ });
+ scanVideo._zxingReader=reader;
+ return true;
+}
+async function startScanner(){
+ scanner.classList.add("open");scanStatus.textContent="Starting camera…";
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scanStatus.textContent="Camera unavailable. Enter the ISBN manually.";return}
+ try{
+  if("BarcodeDetector" in window){
+   try{await startBarcodeDetector();return;}catch(e){}
+  }
+  scanStatus.textContent="Starting barcode scanner…";
+  await startZXing();
+ }catch(e){
+  scanStatus.textContent="Barcode detection isn't available in this browser. Enter the ISBN manually.";
+ }
 }
 
 document.getElementById("fabAdd").onclick=function(){openForm(false,null)};
@@ -810,25 +847,32 @@ function renderDashboard(){
  var b=document.getElementById("refreshReleases");if(b)b.onclick=refreshWishlistReleases;
 }
 function render(){
- renderNav();
- var isDashboard=db.page!=="collection";
- stats.style.display=isDashboard?"grid":"none";
- dashboard.style.display=isDashboard?"block":"none";
- content.style.display=isDashboard?"none":"block";
- if(isDashboard){
-  renderStats();
-  renderDashboard();
-  ensureDashboardCovers();
-  refreshWishlistReleases();
- }else if(db.page==="settings"){
-  stats.style.display="none";dashboard.style.display="none";content.style.display="block";renderSettings();
- }else{
-  if(db.view==="writers")renderPeople("writers");
-  else if(db.view==="artists")renderPeople("artists");
-  else if(db.view==="works")renderWorks();
-  else if(db.view==="copies")renderCopies();
-  else if(db.view==="wishlist")renderWishlist();
-  else renderList();
+ try{
+  renderNav();
+  var isSettings=db.page==="settings";
+  var isDashboard=db.page!=="collection"&&!isSettings;
+  stats.style.display=isDashboard?"grid":"none";
+  dashboard.style.display=isDashboard?"block":"none";
+  content.style.display=isDashboard||isSettings?"block":"block";
+  if(isDashboard){
+   renderStats();
+   renderDashboard();
+   ensureDashboardCovers();
+   refreshWishlistReleases();
+  }else if(isSettings){
+   stats.style.display="none";dashboard.style.display="none";renderSettings();
+  }else{
+   if(db.view==="writers")renderPeople("writers");
+   else if(db.view==="artists")renderPeople("artists");
+   else if(db.view==="works")renderWorks();
+   else if(db.view==="copies")renderCopies();
+   else if(db.view==="wishlist")renderWishlist();
+   else renderList();
+  }
+ }catch(e){
+  stats.style.display="none";dashboard.style.display="none";content.style.display="block";
+  content.innerHTML='<div class="empty"><strong>The app could not finish loading.</strong><div class="meta" style="margin-top:8px">Please reload the page. If this happens again, send the error to support.</div></div>';
+  console.error("Panel render error",e);
  }
 }
 load();document.documentElement.lang=effectiveLanguage();render();
