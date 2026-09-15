@@ -563,7 +563,7 @@ function applyTitleResult(r){
 }
 async function searchAmazonDirect(query){
  try{
-  var res=await fetch("/.netlify/functions/amazon-search?q="+encodeURIComponent(query));
+  var res=await fetch("/api/amazon-search?q="+encodeURIComponent(query));
   if(!res.ok)return [];
   var data=await res.json();
   return (data.items||[]).map(function(x){return {title:x.title||"",subtitle:x.subtitle||"",originalTitle:x.title||"",work:x.title||"",volume:"",authors:x.authors||[],publisher:x.publisher||"",publishedDate:x.publishedDate||"",language:x.language||"",isbn:x.isbn||"",cover:x.cover||"",source:"Amazon.es",price:x.price||"",score:titleScore(query,x.title||"",x.subtitle||"")}});
