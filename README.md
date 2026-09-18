@@ -1,19 +1,15 @@
-# Panel Comic Collection V5.25 — Cloudflare Pages
+# Panel Comic Collection V5.27
 
-Deploy the contents of this folder to the root of a Cloudflare Pages Git repository.
+Cloudflare Pages package.
 
 Structure:
+- index.html
+- _routes.json
+- functions/api/amazon-search.js
+- functions/api/br-search.js
+- functions/api/cover.js
 
-```text
-index.html
-_routes.json
-functions/
-└── api/
-    ├── amazon-search.js
-    ├── br-search.js
-    └── cover.js
-```
-
-Cloudflare Pages should use the `main` branch, no build command, and `/` as the output directory.
-
-V5.25 adds a Brazilian web catalogue fallback for title/ISBN searches and uses wsrv.nl as an image cache/proxy for cover sources. The Brazilian fallback searches Brazilian catalogue/retail sources and is especially useful for Panini Brasil editions that are absent from international book databases.
+V5.27 verification changes:
+- Brazilian search no longer relies only on Google Books language filtering; it uses ISBN-first Google Books BR plus Bing/DuckDuckGo discovery of Brazilian catalogues.
+- Cover endpoint validates image responses before returning them and searches Brazilian catalogue pages when standard cover sources fail.
+- Version marker is V5.27.
