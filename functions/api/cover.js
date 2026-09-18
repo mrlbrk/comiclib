@@ -1,95 +1,45 @@
 function normalizeISBN(value) {
-  const s = String(value || '').replace(/[^0-9Xx]/g, '').toUpperCase();
-  if (/^(978|979)\d{10}$/.test(s)) return s;
-  return s;
+  return String(value || '').replace(/[^0-9Xx]/g, '').toUpperCase();
 }
 
-function pickGoogleCover(info) {
-  const links = (info && info.imageLinks) || {};
-  return links.extraLarge || links.large || links.medium || links.thumbnail || links.smallThumbnail || '';
-}
-
-async function fetchImage(url) {
-  if (!url) return null;
+async function json(url) {
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
-      },
-      redirect: 'follow'
-    });
-    if (!response.ok) return null;
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.startsWith('image/')) return null;
-    return new Response(response.body, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400'
-      }
-    });
-  } catch (_) {
-    return null;
-  }
+    const r = await fetch(url, {headers:{Accept:'application/json'}});
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) { return null; }
 }
 
 export async function onRequestGet({ request }) {
-  const url = new URL(request.url);
-  const isbn = normalizeISBN(url.searchParams.get('isbn'));
+  const u = new URL(request.url);
+  const isbn = normalizeISBN(u.searchParams.get('isbn'));
+  if (!/^(978|979)\d{10}$/.test(isbn)) return new Response('Invalid ISBN', {status:400});
 
-  if (!/^(978|979)\d{10}$/.test(isbn)) {
-    return new Response('Invalid ISBN', { status: 400 });
+  const candidates = [];
+  const gb = await json('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(isbn) + '&maxResults=10&country=BR');
+  const items = (gb && gb.items) || [];
+  const exact = items.find(item => ((item.volumeInfo || {}).industryIdentifiers || []).some(id => normalizeISBN(id.identifier) === isbn));
+  const item = exact || items[0];
+  const info = item && item.volumeInfo;
+  if (item && item.id) candidates.push('https://books.google.com/books/content?id=' + encodeURIComponent(item.id) + '&printsec=frontcover&img=1&zoom=2&source=gbs_api');
+  const links = (info && info.imageLinks) || {};
+  for (const k of ['extraLarge','large','medium','thumbnail','smallThumbnail']) if (links[k]) candidates.push(String(links[k]).replace(/^http:/,'https:'));
+
+  const ol = await json('https://openlibrary.org/isbn/' + encodeURIComponent(isbn) + '.json');
+  if (ol && ol.covers && ol.covers[0]) candidates.push('https://covers.openlibrary.org/b/id/' + ol.covers[0] + '-L.jpg');
+
+  // Amazon ISBN image endpoints are useful for editions that are poorly indexed by Google/Open Library.
+  candidates.push('https://m.media-amazon.com/images/P/' + isbn + '.01.LZZZZZZZ.jpg');
+  candidates.push('https://images-na.ssl-images-amazon.com/images/P/' + isbn + '.01.LZZZZZZZ.jpg');
+
+  for (const candidate of candidates) {
+    try {
+      const r = await fetch(candidate, {method:'HEAD', redirect:'follow', headers:{'User-Agent':'Mozilla/5.0'}});
+      const ct = r.headers.get('content-type') || '';
+      if (r.ok && ct.startsWith('image/')) return Response.redirect(candidate, 302);
+    } catch (_) {}
   }
-
-  // Google Books first: it is the primary metadata/cover source used by the app.
-  try {
-    const api = await fetch(
-      'https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(isbn) + '&maxResults=5',
-      { headers: { Accept: 'application/json' } }
-    );
-    if (api.ok) {
-      const data = await api.json();
-      const items = data.items || [];
-      const exact = items.find(item => {
-        const ids = ((item.volumeInfo || {}).industryIdentifiers || []);
-        return ids.some(id => normalizeISBN(id.identifier) === isbn);
-      });
-      const item = exact || items[0];
-      const info = item && item.volumeInfo;
-
-      if (item && item.id) {
-        const contentUrl =
-          'https://books.google.com/books/content?id=' + encodeURIComponent(item.id) +
-          '&printsec=frontcover&img=1&zoom=2&source=gbs_api';
-        const image = await fetchImage(contentUrl);
-        if (image) return image;
-      }
-
-      const googleCover = pickGoogleCover(info).replace(/^http:\/\//, 'https://');
-      const image = await fetchImage(googleCover);
-      if (image) return image;
-    }
-  } catch (_) {}
-
-  // Open Library fallback.
-  try {
-    const ol = await fetch('https://openlibrary.org/isbn/' + encodeURIComponent(isbn) + '.json', {
-      headers: { Accept: 'application/json' }
-    });
-    if (ol.ok) {
-      const data = await ol.json();
-      if (data.covers && data.covers[0]) {
-        const image = await fetchImage(
-          'https://covers.openlibrary.org/b/id/' + data.covers[0] + '-L.jpg'
-        );
-        if (image) return image;
-      }
-    }
-  } catch (_) {}
-
-  return new Response('Cover not found', {
-    status: 404,
-    headers: { 'Cache-Control': 'no-store' }
-  });
+  // Even when HEAD is blocked, Google/Open Library URLs can often be rendered directly by the browser.
+  if (candidates.length) return Response.redirect(candidates[0], 302);
+  return new Response('Cover not found', {status:404});
 }

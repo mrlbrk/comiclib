@@ -67,7 +67,9 @@ export async function onRequestGet({ request }) {
   const q = cleanText(url.searchParams.get('q'));
   if (!q) return Response.json({items: [], error: 'Missing query'}, {status: 400});
 
-  const amazonUrl = 'https://www.amazon.es/s?k=' + encodeURIComponent(q) + '&i=stripbooks';
+  const market = (url.searchParams.get('market') || 'es').toLowerCase() === 'br' ? 'br' : 'es';
+  const host = market === 'br' ? 'www.amazon.com.br' : 'www.amazon.es';
+  const amazonUrl = 'https://' + host + '/s?k=' + encodeURIComponent(q) + '&i=stripbooks';
   try {
     const response = await fetch(amazonUrl, {
       headers: {
@@ -86,11 +88,11 @@ export async function onRequestGet({ request }) {
       if (seen.has(key)) return false;
       seen.add(key); return true;
     }).slice(0, 10);
-    return Response.json({items, source:'Amazon.es'} , {
+    return Response.json({items, source:market === 'br' ? 'Amazon.com.br' : 'Amazon.es'} , {
       headers: {'Cache-Control':'public, max-age=300'}
     });
   } catch (error) {
-    return Response.json({items: [], source:'Amazon.es', error:String(error && error.message || error)}, {
+    return Response.json({items: [], source:market === 'br' ? 'Amazon.com.br' : 'Amazon.es', error:String(error && error.message || error)}, {
       status: 200,
       headers: {'Cache-Control':'no-store'}
     });
