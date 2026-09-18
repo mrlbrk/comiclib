@@ -611,17 +611,26 @@ function applyTitleResult(r){
 }
 async function searchAmazonDirect(query){
  try{
-  var res=await fetch("/api/amazon-search?q="+encodeURIComponent(query));
+  var res=await fetch("/api/amazon-search?q="+encodeURIComponent(query)+"&market=es");
   if(!res.ok)return [];
   var data=await res.json();
   return (data.items||[]).map(function(x){return {title:x.title||"",subtitle:x.subtitle||"",originalTitle:x.title||"",work:bestWorkGuess(x.title||"",x.subtitle||"",x.series||""),volume:"",authors:x.authors||[],publisher:x.publisher||"",publishedDate:x.publishedDate||"",language:x.language||"",isbn:x.isbn||"",cover:x.cover||"",source:"Amazon.es",price:x.price||"",score:titleScore(query,x.title||"",x.subtitle||"")}});
  }catch(e){return []}
 }
+async function searchAmazonBrazil(query){
+ try{
+  var res=await fetch("/api/amazon-search?q="+encodeURIComponent(query)+"&market=br");
+  if(!res.ok)return [];
+  var data=await res.json();
+  return (data.items||[]).map(function(x){return {title:x.title||"",subtitle:x.subtitle||"",originalTitle:x.title||"",work:bestWorkGuess(x.title||"",x.subtitle||"",x.series||""),volume:"",authors:x.authors||[],publisher:x.publisher||"",publishedDate:x.publishedDate||"",language:x.language||"pt",isbn:x.isbn||"",cover:x.cover||"",source:"Amazon.com.br",price:x.price||"",score:titleScore(query,x.title||"",x.subtitle||"")+4};});
+ }catch(e){return []}
+}
+
 
 async function searchTitleMatches(query){
  query=String(query||"").trim();var box=document.getElementById("titleResults"),st=document.getElementById("titleSearchStatus");
  if(!query){if(st)st.textContent="Enter a title first.";if(box)box.innerHTML="";return}
- if(st)st.textContent="Searching Google Books, Open Library and Amazon.es directly…";if(box)box.innerHTML="";
+ if(st)st.textContent="Searching Google Books (including Brazil), Open Library, Amazon.es and Amazon.com.br…";if(box)box.innerHTML="";
  var results=[],seen={};
  function add(r){var key=(r.isbn||titleNorm(r.title)+"|"+(r.source||"")).replace(/[^a-z0-9|]/g,"");if(!key||seen[key])return;seen[key]=1;r.score=r.score||titleScore(query,r.title,r.subtitle);results.push(r)}
  try{
@@ -633,6 +642,7 @@ async function searchTitleMatches(query){
   if(ol.ok){var od=await ol.json();(od.docs||[]).forEach(function(d){var isbn=(d.isbn||[]).find(function(x){return /^97[89]/.test(x)})||"";var cover=d.cover_i?"https://covers.openlibrary.org/b/id/"+d.cover_i+"-M.jpg":"";add({title:d.title||"",subtitle:"",originalTitle:d.title||"",work:bestWorkGuess(d.title||"",d.subtitle||"",d.series||""),volume:"",authors:d.author_name||[],publisher:(d.publisher||[])[0]||"",publishedDate:d.first_publish_year?String(d.first_publish_year):"",language:(d.language||[])[0]||"",isbn:isbn,cover:cover,source:"Open Library"})})}
  }catch(e){}
  try{var amz=await searchAmazonDirect(query);amz.forEach(add)}catch(e){}
+ try{var amzbr=await searchAmazonBrazil(query);amzbr.forEach(add)}catch(e){}
  results.sort(function(a,b){return (b.score||0)-(a.score||0)});results=results.slice(0,10);
  if(st)st.textContent=results.length?"Select the edition that best matches what you have. Results include Amazon.es when available.":"No matches found.";
  renderTitleResults(results);
