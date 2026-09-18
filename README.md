@@ -1,15 +1,15 @@
-# Panel Comic Collection V5.27
+# ComicLib V5.28 — Cloudflare Worker + Static Assets
 
-Cloudflare Pages package.
+This version is built for a `*.workers.dev` deployment, not Pages Functions.
 
 Structure:
-- index.html
-- _routes.json
-- functions/api/amazon-search.js
-- functions/api/br-search.js
-- functions/api/cover.js
+- `src/index.js` — Worker API routes and static asset fallback
+- `public/index.html` — ComicLib UI
+- `wrangler.json` — Workers Static Assets configuration
 
-V5.27 verification changes:
-- Brazilian search no longer relies only on Google Books language filtering; it uses ISBN-first Google Books BR plus Bing/DuckDuckGo discovery of Brazilian catalogues.
-- Cover endpoint validates image responses before returning them and searches Brazilian catalogue pages when standard cover sources fail.
-- Version marker is V5.27.
+API routes:
+- `/api/cover?isbn=...`
+- `/api/br-search?q=...`
+- `/api/amazon-search?q=...&market=es|br`
+
+The Worker explicitly routes `/api/*` before serving the static application.
