@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Panel — Comic Collection V5.20</title>
+<title>Panel — Comic Collection V5.21</title>
 <style>
 :root{--bg:#f4f6fa;--card:#fff;--text:#172033;--muted:#697386;--line:#e1e6ef;--accent:#635bff;--green:#17864e}
 *{box-sizing:border-box}
@@ -65,7 +65,7 @@ input,select,textarea{width:100%;border:1px solid #d4dbe6;border-radius:9px;padd
 <body>
 <header>
 <h1>📚 Panel — Comic Collection</h1>
-<p>V5.20 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
+<p>V5.21 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
 </header>
 <nav id="nav"></nav>
 <main>
@@ -96,7 +96,7 @@ input,select,textarea{width:100%;border:1px solid #d4dbe6;border-radius:9px;padd
 (function(){
 "use strict";
 
-var DB_KEY="panelComicCollectionV5_20";
+var DB_KEY="panelComicCollectionV5_21";
 var db={view:"editions",editions:[],settings:{currency:"EUR",language:"en"}};
 var ratesCache={base:"EUR",rates:{EUR:1},fetchedAt:0};
 var filters={q:"",country:"",language:"",publisher:"",status:""};
@@ -691,13 +691,24 @@ async function lookupISBN(value){
    setStatus('⚠ ISBN captured, but no metadata source returned a match. The ISBN is still in the form.','No online metadata match was found. You can complete the edition manually or search by title.');
  }
 }
+function stopScanner(){
+  try{
+    if(scanVideo&&scanVideo._zxingReader){
+      try{scanVideo._zxingReader.reset();}catch(e){}
+      scanVideo._zxingReader=null;
+    }
+  }catch(e){}
+  if(scanStream){try{scanStream.getTracks().forEach(function(t){t.stop();});}catch(e){} scanStream=null;}
+  if(scanVideo){try{scanVideo.pause();}catch(e){} scanVideo.srcObject=null;}
+  if(scanner)scanner.classList.remove("open");
+}
 var zxingPromise=null;
 function loadZXing(){
  if(zxingPromise)return zxingPromise;
  zxingPromise=new Promise(function(resolve,reject){
   if(window.ZXingBrowser){resolve(window.ZXingBrowser);return;}
   var sc=document.createElement("script");
-  sc.src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js";
+  sc.src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js";
   sc.onload=function(){if(window.ZXingBrowser)resolve(window.ZXingBrowser);else reject(new Error("ZXing did not load"));};
   sc.onerror=function(){reject(new Error("ZXing failed to load"));};
   document.head.appendChild(sc);
@@ -731,7 +742,7 @@ async function startZXing(){
  scanVideo.srcObject=scanStream;await scanVideo.play();scanStatus.textContent="Scanning…";
  var reader=new ZX.BrowserMultiFormatReader();
  reader.decodeFromVideoDevice(undefined,scanVideo,function(result,error){
-  if(result){var value=result.getText?result.getText():result.text||"";stopScanner();var normalized=normalizeISBN(value);var input=document.getElementById("fisbn");if(input)input.value=normalized;lookupISBN(normalized);}
+  if(result){var value=result.getText?result.getText():result.text||"";if(!value)return;stopScanner();var normalized=normalizeISBN(value);if(normalized){var input=document.getElementById("fisbn");if(input)input.value=normalized;lookupISBN(normalized);}}
  });
  scanVideo._zxingReader=reader;
  return true;
