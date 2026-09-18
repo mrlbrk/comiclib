@@ -627,6 +627,14 @@ async function searchAmazonBrazil(query){
 }
 
 
+async function searchBrazilWeb(query){
+ try{
+  var res=await fetch('/api/br-search?q='+encodeURIComponent(query));
+  if(!res.ok)return [];
+  var data=await res.json();
+  return (data.items||[]).map(function(x){return {title:x.title||'',subtitle:x.snippet||'',originalTitle:x.title||'',work:bestWorkGuess(x.title||'',x.snippet||'',x.series||''),volume:'',authors:x.authors||[],publisher:x.publisher||'',publishedDate:x.publishedDate||'',language:x.language||'pt',isbn:x.isbn||'',cover:x.cover||'',url:x.url||'',source:'Brazil web',score:titleScore(query,x.title||'',x.snippet||'')+7};});
+ }catch(e){return []}
+}
 async function searchTitleMatches(query){
  query=String(query||"").trim();var box=document.getElementById("titleResults"),st=document.getElementById("titleSearchStatus");
  if(!query){if(st)st.textContent="Enter a title first.";if(box)box.innerHTML="";return}
@@ -641,6 +649,7 @@ async function searchTitleMatches(query){
   var ol=await fetch("https://openlibrary.org/search.json?title="+encodeURIComponent(query)+"&limit=10");
   if(ol.ok){var od=await ol.json();(od.docs||[]).forEach(function(d){var isbn=(d.isbn||[]).find(function(x){return /^97[89]/.test(x)})||"";var cover=d.cover_i?"https://covers.openlibrary.org/b/id/"+d.cover_i+"-M.jpg":"";add({title:d.title||"",subtitle:"",originalTitle:d.title||"",work:bestWorkGuess(d.title||"",d.subtitle||"",d.series||""),volume:"",authors:d.author_name||[],publisher:(d.publisher||[])[0]||"",publishedDate:d.first_publish_year?String(d.first_publish_year):"",language:(d.language||[])[0]||"",isbn:isbn,cover:cover,source:"Open Library"})})}
  }catch(e){}
+ try{var br=await searchBrazilWeb(query);br.forEach(add)}catch(e){}
  try{var amz=await searchAmazonDirect(query);amz.forEach(add)}catch(e){}
  try{var amzbr=await searchAmazonBrazil(query);amzbr.forEach(add)}catch(e){}
  results.sort(function(a,b){return (b.score||0)-(a.score||0)});results=results.slice(0,10);
@@ -716,6 +725,23 @@ async function lookupISBN(value){
    }catch(e){}
    return null;
  }
+ async function brazilLookup(){
+  try{
+   var res=await fetch('/api/br-search?q='+encodeURIComponent(clean));
+   if(!res.ok)return null;
+   var data=await res.json(),items=data.items||[];
+   var exact=items.find(function(x){return normalizeISBN(x.isbn||'')===clean});
+   var item=exact||items[0];
+   if(item&&item.title){
+    var obj={title:item.title,subtitle:'',authors:item.authors||[],publisher:item.publisher||'',publishedDate:item.publishedDate||'',language:'pt',imageLinks:item.cover?{large:item.cover}:{}};
+    applyBasic(obj,'Brazil web');
+    if(item.isbn)set('fisbn',normalizeISBN(item.isbn));
+    if(item.cover){set('fcoverUrl',item.cover);var cp=document.getElementById('coverPreview');if(cp){cp.src=item.cover;cp.style.display='block'}}
+    return item;
+   }
+  }catch(e){}
+  return null;
+ }
  async function gcdLookup(){
    // Keep GCD enrichment short and non-blocking. A slow/changed GCD endpoint must never prevent ISBN metadata.
    var title=(document.getElementById('ftitle')||{}).value||'';if(!title)return false;
@@ -735,12 +761,12 @@ async function lookupISBN(value){
    }catch(e){}return false;
  }
  if(!isValidISBN13(clean)){setStatus('ISBN captured, but it is not a valid ISBN-13: '+clean,'Please check the barcode and try again.');return;}
- setStatus('ISBN '+clean+' captured. Looking up metadata…','Searching available metadata sources…');
- var google=null,ol=null,gcd=false;
+ setStatus('ISBN '+clean+' captured. Looking up metadata…','Searching Google Books, Open Library and Brazilian comic/catalogue sources…');
+ var google=null,ol=null,br=null,gcd=false;
  // Run independent sources concurrently. One failed source must not block the others.
- try{[google,ol]=await Promise.all([googleLookup(),openLibraryLookup()])}catch(e){}
+ try{[google,ol,br]=await Promise.all([googleLookup(),openLibraryLookup(),brazilLookup()])}catch(e){}
  try{gcd=await gcdLookup()}catch(e){}
- var found=!!((document.getElementById('ftitle')||{}).value||google||ol);
+ var found=!!((document.getElementById('ftitle')||{}).value||google||ol||br);
  var cover=document.getElementById('fcoverUrl');
  if(found){
    var country=document.getElementById('feditionCountry'),currency=document.getElementById('fcurrency');if(country&&currency){var cc=currencyForCountry(country.value);if(cc)currency.value=cc}
