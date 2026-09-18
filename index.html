@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Panel — Comic Collection V5.23</title>
+<title>Panel — Comic Collection V5.26</title>
 <style>
 :root{--bg:#f4f6fa;--card:#fff;--text:#172033;--muted:#697386;--line:#e1e6ef;--accent:#635bff;--green:#17864e}
 *{box-sizing:border-box}
@@ -65,7 +65,7 @@ input,select,textarea{width:100%;border:1px solid #d4dbe6;border-radius:9px;padd
 <body>
 <header>
 <h1>📚 Panel — Comic Collection</h1>
-<p>V5.23 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
+<p>V5.26 · Works, editions, copies, writers, artists, reading progress & wishlist</p>
 </header>
 <nav id="nav"></nav>
 <main>
@@ -604,7 +604,7 @@ function applyTitleResult(r){
  function put(id,val){var e=document.getElementById(id);if(e&&val!==undefined&&val!==null&&String(val).trim()!=="")e.value=val}
  put("ftitle",r.title);put("foriginalTitle",r.originalTitle||r.title);put("fwork",reconcileWork(r.work||bestWorkGuess(r.title,r.subtitle,r.series),true));put("fvolume",r.volume||"");put("fpublisher",r.publisher||"");put("fyear",String(r.publishedDate||"").match(/(19|20)\d{2}/)||"");put("flanguage",r.language||"");put("fisbn",r.isbn||"");put("fcoverUrl",r.isbn?"/api/cover?isbn="+encodeURIComponent(normalizeISBN(r.isbn)):(r.cover||""));
  if(r.authors&&r.authors.length){put("fwriters",reconcilePeople(r.authors,"writer",true).join(", "));}
- var cp=document.getElementById("coverPreview");if(cp&&r.cover){cp.src=r.cover;cp.style.display="block"}
+ var cp=document.getElementById("coverPreview");if(cp){var preview=r.isbn?"/api/cover?isbn="+encodeURIComponent(normalizeISBN(r.isbn)):(r.cover||"");if(preview){cp.src=preview;cp.style.display="block"}}
  var st=document.getElementById("titleSearchStatus");if(st)st.textContent="Selected “"+r.title+"”. Review the edition details before saving.";
  var box=document.getElementById("titleResults");if(box)box.innerHTML="";
  if(r.isbn)lookupISBN(r.isbn);
@@ -642,6 +642,10 @@ async function searchTitleMatches(query){
  var results=[],seen={};
  function add(r){var key=(r.isbn||titleNorm(r.title)+"|"+(r.source||"")).replace(/[^a-z0-9|]/g,"");if(!key||seen[key])return;seen[key]=1;r.score=r.score||titleScore(query,r.title,r.subtitle);results.push(r)}
  try{
+  var gbBR=await fetch("https://www.googleapis.com/books/v1/volumes?q="+encodeURIComponent(query)+"&maxResults=20&country=BR&langRestrict=pt");
+  if(gbBR.ok){var gbrd=await gbBR.json();(gbrd.items||[]).forEach(function(item){var v=item.volumeInfo||{};add({title:v.title||"",subtitle:v.subtitle||"",originalTitle:v.title||"",work:bestWorkGuess(v.title||"",v.subtitle||"",v.seriesInfo&&v.seriesInfo.volumeSeries||""),volume:"",authors:resultAuthors(v),publisher:v.publisher||"",publishedDate:v.publishedDate||"",language:v.language||"pt",isbn:resultISBN(v),cover:((v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail))||"").replace(/^http:\/\//,"https://"),source:"Google Books BR",score:titleScore(query,v.title||"",v.subtitle||"")+12})})}
+ }catch(e){}
+ try{
   var gb=await fetch("https://www.googleapis.com/books/v1/volumes?q=intitle:"+encodeURIComponent(query)+"&maxResults=10");
   if(gb.ok){var gd=await gb.json();(gd.items||[]).forEach(function(item){var v=item.volumeInfo||{};add({title:v.title||"",subtitle:v.subtitle||"",originalTitle:v.title||"",work:bestWorkGuess(v.title||"",v.subtitle||"",v.seriesInfo&&v.seriesInfo.volumeSeries||""),volume:"",authors:resultAuthors(v),publisher:v.publisher||"",publishedDate:v.publishedDate||"",language:v.language||"",isbn:resultISBN(v),cover:((v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail))||"").replace(/^http:\/\//,"https://"),source:"Google Books"})})}
  }catch(e){}
@@ -653,7 +657,7 @@ async function searchTitleMatches(query){
  try{var amz=await searchAmazonDirect(query);amz.forEach(add)}catch(e){}
  try{var amzbr=await searchAmazonBrazil(query);amzbr.forEach(add)}catch(e){}
  results.sort(function(a,b){return (b.score||0)-(a.score||0)});results=results.slice(0,10);
- if(st)st.textContent=results.length?"Select the edition that best matches what you have. Results include Amazon.es when available.":"No matches found.";
+ if(st)st.textContent=results.length?"Select the edition that best matches what you have. Results include Brazilian editions from Google Books BR and Brazilian catalogues when available.":"No matches found.";
  renderTitleResults(results);
 }
 function normalizeISBN(raw){
